@@ -1,0 +1,903 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Press Start 2P', monospace; }
+
+  #game-root {
+    width: 100%;
+    min-height: 620px;
+    position: relative;
+    overflow: hidden;
+    background: #1a0533;
+  }
+
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
+  .screen.hidden { opacity: 0; pointer-events: none; }
+
+  /* Animated BG */
+  .bg-layer {
+    position: absolute; inset: 0; z-index: 0;
+    background: linear-gradient(135deg, #1a0533 0%, #2d0a5e 30%, #0a1a4a 60%, #1a3a0a 100%);
+  }
+  .bg-stars { position: absolute; inset: 0; overflow: hidden; }
+  .star { position: absolute; border-radius: 50%; animation: twinkle 2s infinite alternate; }
+
+  @keyframes twinkle { from { opacity: 0.3; transform: scale(1); } to { opacity: 1; transform: scale(1.3); } }
+  @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes barFill { from { width: 0; } to { width: var(--w); } }
+  @keyframes squareFall {
+    0% { top: -30px; opacity: 1; }
+    100% { top: 110%; opacity: 0.5; }
+  }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+  @keyframes shimmer { 0%{opacity:.7} 50%{opacity:1} 100%{opacity:.7} }
+
+  /* LOADING SCREEN */
+  #loading-screen { z-index: 10; }
+  .loading-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 28px;
+    color: #ffd700;
+    text-shadow: 0 0 20px #ff8800, 3px 3px 0 #aa4400;
+    margin-bottom: 8px;
+    animation: float 3s ease-in-out infinite;
+    z-index: 1;
+  }
+  .loading-sub {
+    font-size: 10px;
+    color: #aaa8ff;
+    margin-bottom: 40px;
+    z-index: 1;
+    letter-spacing: 3px;
+  }
+  .loading-bar-wrap {
+    width: 320px; height: 24px;
+    background: #0a0020;
+    border: 3px solid #5533aa;
+    border-radius: 4px;
+    overflow: hidden;
+    z-index: 1;
+  }
+  .loading-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff6600, #ffd700, #00ff88);
+    width: 0;
+    transition: width 0.1s linear;
+    box-shadow: 0 0 8px #ffd700;
+  }
+  .loading-pct {
+    font-size: 10px; color: #ffd700; margin-top: 10px; z-index: 1;
+  }
+  .loading-coins {
+    display: flex; gap: 8px; margin-bottom: 30px; z-index: 1;
+  }
+  .coin-anim {
+    width: 30px; height: 30px; background: #ffd700;
+    border-radius: 50%; border: 3px solid #aa8800;
+    animation: spin 1.5s linear infinite;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: #aa4400;
+  }
+  .coin-anim:nth-child(2) { animation-delay: 0.3s; }
+  .coin-anim:nth-child(3) { animation-delay: 0.6s; }
+
+  /* MENU SCREEN */
+  #menu-screen { z-index: 5; }
+  .menu-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 24px;
+    color: #ffd700;
+    text-shadow: 0 0 15px #ff8800, 3px 3px 0 #aa4400;
+    margin-bottom: 6px;
+    z-index: 1;
+    animation: float 3s ease-in-out infinite;
+  }
+  .menu-sub { font-size: 9px; color: #ff99ff; margin-bottom: 36px; z-index: 1; letter-spacing: 2px; }
+  .menu-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 13px;
+    padding: 14px 36px;
+    border: 3px solid #ffd700;
+    background: linear-gradient(180deg, #3a1a6a 0%, #1a0533 100%);
+    color: #ffd700;
+    cursor: pointer;
+    border-radius: 6px;
+    margin: 6px;
+    z-index: 1;
+    transition: all 0.15s;
+    text-shadow: 0 0 8px #ffd700;
+    min-width: 200px;
+  }
+  .menu-btn:hover { background: linear-gradient(180deg, #6a2acc 0%, #3a0a88 100%); transform: scale(1.05); box-shadow: 0 0 16px #ffd700; }
+  .menu-btn:active { transform: scale(0.97); }
+  .menu-decorations { display: flex; gap: 20px; margin-bottom: 24px; z-index: 1; }
+  .deco-sq {
+    width: 20px; height: 20px; border: 2px solid #ffd700;
+    animation: spin 3s linear infinite;
+  }
+  .deco-sq:nth-child(2) { animation-direction: reverse; background: #ffd70033; }
+
+  /* GAME SCREEN */
+  #game-screen { z-index: 3; align-items: stretch; justify-content: flex-start; }
+  .game-header {
+    background: #0d0028cc;
+    border-bottom: 2px solid #5533aa;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 2;
+    flex-shrink: 0;
+  }
+  .coins-display {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 13px;
+    color: #ffd700;
+    text-shadow: 0 0 8px #ff8800;
+    flex: 1;
+  }
+  .hdr-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    padding: 7px 10px;
+    border: 2px solid #5533aa;
+    background: #1a0533;
+    color: #aaa8ff;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .hdr-btn:hover { border-color: #ffd700; color: #ffd700; }
+  .hdr-btn:active { transform: scale(0.95); }
+
+  .game-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+    z-index: 1;
+  }
+
+  /* Dropper area */
+  .dropper-area {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    min-height: 460px;
+  }
+
+  .dropper-col {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .dropper-machine {
+    width: 80px;
+    height: 60px;
+    background: linear-gradient(180deg, #553399 0%, #2d0a5e 100%);
+    border: 3px solid #ffd700;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin-top: 10px;
+    position: relative;
+    animation: pulse 2s infinite;
+    cursor: default;
+  }
+  .dropper-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 6px;
+    color: #ffd700;
+    margin-top: 4px;
+    text-align: center;
+  }
+  .dropper-rate {
+    font-size: 7px;
+    color: #aaffaa;
+    margin-top: 2px;
+    font-family: 'Press Start 2P', monospace;
+  }
+
+  .falling-sq {
+    position: absolute;
+    border: 2px solid #ffd700;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: #fff;
+    font-family: 'Press Start 2P', monospace;
+    pointer-events: none;
+  }
+
+  .collector {
+    position: absolute;
+    bottom: 8px;
+    height: 36px;
+    background: #0d0028;
+    border: 3px solid #ffd700;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: #ffd700;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 190px;
+    background: #0d0028dd;
+    border-left: 2px solid #5533aa;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    gap: 8px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .sidebar-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    color: #ff99ff;
+    border-bottom: 1px solid #5533aa;
+    padding-bottom: 6px;
+    text-align: center;
+  }
+  .upgrade-card {
+    background: #1a0a3a;
+    border: 2px solid #3322aa;
+    border-radius: 6px;
+    padding: 8px;
+  }
+  .upgrade-name {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: #ffd700;
+    margin-bottom: 4px;
+  }
+  .upgrade-info {
+    font-size: 8px;
+    color: #aaa8ff;
+    font-family: 'Press Start 2P', monospace;
+    margin-bottom: 6px;
+    line-height: 1.6;
+  }
+  .upgrade-progress {
+    height: 6px;
+    background: #0a0020;
+    border: 1px solid #3322aa;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .upgrade-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #0077ff, #00ccff);
+    transition: width 0.3s;
+  }
+  .upgrade-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    width: 100%;
+    padding: 7px 4px;
+    border: 2px solid #0066ff;
+    background: linear-gradient(180deg, #001a66 0%, #000d33 100%);
+    color: #00aaff;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .upgrade-btn:hover { background: linear-gradient(180deg, #0033aa 0%, #001166 100%); box-shadow: 0 0 10px #0066ff; color: #fff; }
+  .upgrade-btn:active { transform: scale(0.96); }
+  .upgrade-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .new-dropper-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    width: 100%;
+    padding: 9px 4px;
+    border: 2px solid #ffd700;
+    background: linear-gradient(180deg, #3a1a00 0%, #1a0900 100%);
+    color: #ffd700;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    text-align: center;
+    margin-top: 4px;
+  }
+  .new-dropper-btn:hover { box-shadow: 0 0 12px #ffd700; background: linear-gradient(180deg, #6a3300 0%, #3a1500 100%); }
+  .new-dropper-btn:active { transform: scale(0.96); }
+  .new-dropper-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Settings overlay */
+  #settings-overlay {
+    position: absolute; inset: 0;
+    background: #000000cc;
+    z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .settings-box {
+    background: #1a0533;
+    border: 3px solid #ffd700;
+    border-radius: 10px;
+    padding: 24px 28px;
+    min-width: 280px;
+  }
+  .settings-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    color: #ffd700;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .settings-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .settings-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: #aaa8ff;
+    min-width: 80px;
+  }
+  .settings-row input[type=range] {
+    flex: 1;
+    accent-color: #ffd700;
+  }
+  .vol-val {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: #ffd700;
+    min-width: 30px;
+    text-align: right;
+  }
+  .close-settings {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    padding: 10px 20px;
+    border: 2px solid #ff4444;
+    background: #330000;
+    color: #ff6666;
+    cursor: pointer;
+    border-radius: 4px;
+    width: 100%;
+    margin-top: 6px;
+    transition: all 0.15s;
+  }
+  .close-settings:hover { background: #660000; box-shadow: 0 0 10px #ff0000; }
+
+  .toast {
+    position: absolute;
+    top: 60px; left: 50%; transform: translateX(-50%);
+    background: #ffd700; color: #1a0533;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    z-index: 30;
+    animation: shimmer 0.4s ease;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+</style>
+
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+<div id="game-root">
+  <div class="bg-layer"></div>
+  <div class="bg-stars" id="bg-stars"></div>
+
+  <!-- LOADING -->
+  <div class="screen" id="loading-screen">
+    <div class="loading-coins">
+      <div class="coin-anim">$</div>
+      <div class="coin-anim">$</div>
+      <div class="coin-anim">$</div>
+    </div>
+    <div class="loading-title">DROP TYCOON</div>
+    <div class="loading-sub">▶ RETRO EDITION ◀</div>
+    <div class="loading-bar-wrap">
+      <div class="loading-bar-fill" id="load-bar"></div>
+    </div>
+    <div class="loading-pct" id="load-pct">0%</div>
+  </div>
+
+  <!-- MENU -->
+  <div class="screen hidden" id="menu-screen">
+    <div class="menu-title">DROP TYCOON</div>
+    <div class="menu-sub">▶ RETRO EDITION ◀</div>
+    <div class="menu-decorations">
+      <div class="deco-sq"></div>
+      <div style="font-family:'Press Start 2P',monospace;font-size:10px;color:#ffd700;align-self:center;">★ ★ ★</div>
+      <div class="deco-sq"></div>
+    </div>
+    <button class="menu-btn" id="play-btn">▶ PLAY GAME</button>
+    <button class="menu-btn" id="menu-settings-btn" style="font-size:11px;">⚙ SETTINGS</button>
+  </div>
+
+  <!-- GAME -->
+  <div class="screen hidden" id="game-screen">
+    <div class="game-header">
+      <div class="coins-display" id="coins-display">🪙 0</div>
+      <div style="font-family:'Press Start 2P',monospace;font-size:8px;color:#aaffaa;margin-right:4px;" id="cps-display">0/s</div>
+      <button class="hdr-btn" id="settings-btn">⚙ SET</button>
+      <button class="hdr-btn" id="menu-btn">◀ MENU</button>
+    </div>
+    <div class="game-body">
+      <div class="dropper-area" id="dropper-area"></div>
+      <div class="sidebar">
+        <div class="sidebar-title">UPGRADES</div>
+        <div id="upgrade-list"></div>
+        <button class="new-dropper-btn" id="new-dropper-btn">+ NEW DROPPER</button>
+        <div style="font-family:'Press Start 2P',monospace;font-size:6px;color:#776699;text-align:center;margin-top:2px;" id="dropper-limit-info"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS OVERLAY -->
+  <div id="settings-overlay" style="display:none;">
+    <div class="settings-box">
+      <div class="settings-title">⚙ SETTINGS</div>
+      <div class="settings-row">
+        <div class="settings-label">MUSIC</div>
+        <input type="range" min="0" max="100" value="40" id="music-vol" step="1">
+        <div class="vol-val" id="music-val">40</div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-label">SFX</div>
+        <input type="range" min="0" max="100" value="70" id="sfx-vol" step="1">
+        <div class="vol-val" id="sfx-val">70</div>
+      </div>
+      <button class="close-settings" id="close-settings">✕ CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  let ctx = null;
+  let musicGain, sfxGain, musicNodes = [];
+  let musicVol = 0.4, sfxVol = 0.7;
+
+  function ensureCtx() {
+    if (!ctx) {
+      ctx = new AudioCtx();
+      musicGain = ctx.createGain(); musicGain.gain.value = musicVol; musicGain.connect(ctx.destination);
+      sfxGain = ctx.createGain(); sfxGain.gain.value = sfxVol; sfxGain.connect(ctx.destination);
+    }
+  }
+
+  function playTone(freq, type, dur, vol, startTime) {
+    if (!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(sfxGain);
+    o.type = type; o.frequency.value = freq;
+    const t = startTime || ctx.currentTime;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.start(t); o.stop(t + dur);
+  }
+
+  function playClick() {
+    ensureCtx();
+    playTone(880, 'square', 0.07, 0.3);
+    playTone(1100, 'sine', 0.04, 0.2, ctx.currentTime + 0.03);
+  }
+
+  function playUpgradeSound() {
+    ensureCtx();
+    [440, 550, 660, 880].forEach((f, i) => {
+      playTone(f, 'triangle', 0.15, 0.25, ctx.currentTime + i * 0.07);
+    });
+  }
+
+  function playDropSound() {
+    ensureCtx();
+    if (Math.random() > 0.7) {
+      playTone(220 + Math.random() * 200, 'sine', 0.08, 0.08);
+    }
+  }
+
+  function playNewDropperSound() {
+    ensureCtx();
+    [330, 440, 550, 660, 880].forEach((f, i) => {
+      playTone(f, 'square', 0.2, 0.3, ctx.currentTime + i * 0.06);
+    });
+  }
+
+  // Music: Tobu-inspired energetic loop using Web Audio
+  function startMusic() {
+    ensureCtx();
+    stopMusic();
+    const bpm = 138;
+    const beat = 60 / bpm;
+    const barLen = beat * 4;
+
+    function playLoop() {
+      const now = ctx.currentTime;
+      // Bass line
+      const bassNotes = [130.81, 130.81, 164.81, 174.61, 130.81, 130.81, 196, 164.81];
+      bassNotes.forEach((f, i) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(musicGain);
+        o.type = 'sawtooth'; o.frequency.value = f;
+        const t = now + i * beat * 0.5;
+        g.gain.setValueAtTime(0.18, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + beat * 0.45);
+        o.start(t); o.stop(t + beat * 0.5);
+      });
+      // Lead
+      const leadNotes = [523.25, 659.25, 783.99, 659.25, 523.25, 392, 440, 523.25];
+      leadNotes.forEach((f, i) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(musicGain);
+        o.type = 'square'; o.frequency.value = f;
+        const t = now + i * beat * 0.5;
+        g.gain.setValueAtTime(0.08, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + beat * 0.4);
+        o.start(t); o.stop(t + beat * 0.5);
+      });
+      // Kick drum
+      for (let i = 0; i < 8; i++) {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(musicGain);
+        o.type = 'sine'; o.frequency.value = 120;
+        o.frequency.exponentialRampToValueAtTime(30, now + i * beat * 0.5 + 0.1);
+        const t = now + i * beat * 0.5;
+        g.gain.setValueAtTime(0.4, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        o.start(t); o.stop(t + 0.2);
+      }
+      // Hi hat
+      for (let i = 0; i < 16; i++) {
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let j = 0; j < data.length; j++) data[j] = Math.random() * 2 - 1;
+        const src = ctx.createBufferSource();
+        const g = ctx.createGain();
+        const filt = ctx.createBiquadFilter();
+        filt.type = 'highpass'; filt.frequency.value = 8000;
+        src.buffer = buf; src.connect(filt); filt.connect(g); g.connect(musicGain);
+        const t = now + i * beat * 0.25;
+        g.gain.setValueAtTime(0.07, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+        src.start(t); src.stop(t + 0.06);
+      }
+      musicNodes.loopTimer = setTimeout(playLoop, barLen * 1000);
+    }
+    playLoop();
+  }
+
+  function stopMusic() {
+    if (musicNodes.loopTimer) clearTimeout(musicNodes.loopTimer);
+  }
+
+  // Stars
+  const starsEl = document.getElementById('bg-stars');
+  for (let i = 0; i < 60; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random() * 4 + 1;
+    s.style.cssText = `width:${size}px;height:${size}px;left:${Math.random()*100}%;top:${Math.random()*100}%;background:${['#ffd700','#aaa8ff','#ff99ff','#00ffaa'][Math.floor(Math.random()*4)]};animation-delay:${Math.random()*3}s;animation-duration:${1.5+Math.random()*2}s`;
+    starsEl.appendChild(s);
+  }
+
+  // State
+  let coins = 0;
+  let droppers = [];
+  let maxDroppers = 2;
+  const MAX_UPGRADES = 20;
+
+  const UPGRADE_DEFS = [
+    { id: 'speed', name: 'DROP SPEED', desc: 'Drops fall faster', costBase: 50, costMult: 2.2, effect: 'speed' },
+    { id: 'value', name: 'DROP VALUE', desc: 'Each drop = +1 coin bonus', costBase: 80, costMult: 2.5, effect: 'value' },
+    { id: 'multi', name: 'MULTI DROP', desc: 'Drop 2x squares at once', costBase: 200, costMult: 3, effect: 'multi' },
+    { id: 'limit', name: 'DROPPER LIMIT+1', desc: 'Unlock one more slot', costBase: 300, costMult: 5, effect: 'limit', maxLevel: 8 },
+  ];
+
+  const upgradeState = {};
+  UPGRADE_DEFS.forEach(u => { upgradeState[u.id] = { level: 0 }; });
+
+  function getUpgradeCost(def) {
+    const lvl = upgradeState[def.id].level;
+    const maxLvl = def.id === 'limit' ? (def.maxLevel || 99) : MAX_UPGRADES;
+    if (lvl >= maxLvl) return null;
+    return Math.floor(def.costBase * Math.pow(def.costMult, lvl));
+  }
+
+  function dropperCoinsPerSec(dp) {
+    const speedLvl = upgradeState.speed.level;
+    const valueLvl = upgradeState.value.level;
+    const multiLvl = upgradeState.multi.level;
+    const interval = Math.max(0.4, 2.5 - speedLvl * 0.1);
+    const value = dp.baseValue + valueLvl;
+    const multi = multiLvl > 0 ? 2 : 1;
+    return (value * multi / interval).toFixed(1);
+  }
+
+  // Loading
+  let loadPct = 0;
+  const loadBar = document.getElementById('load-bar');
+  const loadPctEl = document.getElementById('load-pct');
+  const loadInterval = setInterval(() => {
+    loadPct += Math.random() * 8 + 2;
+    if (loadPct >= 100) {
+      loadPct = 100;
+      clearInterval(loadInterval);
+      setTimeout(showMenu, 400);
+    }
+    loadBar.style.width = loadPct + '%';
+    loadPctEl.textContent = Math.floor(loadPct) + '%';
+  }, 120);
+
+  function showMenu() {
+    document.getElementById('loading-screen').classList.add('hidden');
+    document.getElementById('menu-screen').classList.remove('hidden');
+  }
+
+  function showGame() {
+    document.getElementById('menu-screen').classList.add('hidden');
+    document.getElementById('game-screen').classList.remove('hidden');
+    if (droppers.length === 0) initGame();
+    startMusic();
+    startGameLoop();
+  }
+
+  function initGame() {
+    coins = 0;
+    droppers = [];
+    Object.keys(upgradeState).forEach(k => { upgradeState[k].level = 0; });
+    maxDroppers = 2;
+    addDropper();
+    renderSidebar();
+    renderDroppers();
+  }
+
+  function addDropper() {
+    const colors = ['#ffd700', '#ff6699', '#00ffaa', '#66aaff'];
+    const emojis = ['📦', '🎁', '💎', '🔮'];
+    const idx = droppers.length;
+    droppers.push({
+      id: idx,
+      color: colors[idx % colors.length],
+      emoji: emojis[idx % emojis.length],
+      baseValue: 1 + idx,
+    });
+  }
+
+  // Dropper render
+  function renderDroppers() {
+    const area = document.getElementById('dropper-area');
+    area.querySelectorAll('.dropper-col').forEach(e => e.remove());
+    const W = area.offsetWidth || 480;
+    droppers.forEach((dp, i) => {
+      const col = document.createElement('div');
+      col.className = 'dropper-col';
+      col.id = 'dropper-col-' + dp.id;
+      const slotW = Math.floor(W / maxDroppers);
+      const x = i * slotW + (slotW - 100) / 2;
+      col.style.left = x + 'px';
+      col.innerHTML = `
+        <div class="dropper-machine" style="border-color:${dp.color}">
+          <span>${dp.emoji}</span>
+        </div>
+        <div class="dropper-label" style="color:${dp.color}">DROPPER ${dp.id + 1}</div>
+        <div class="dropper-rate" id="dp-rate-${dp.id}">${dropperCoinsPerSec(dp)}/s</div>
+      `;
+      const collector = document.createElement('div');
+      collector.className = 'collector';
+      collector.style.cssText = `left:${x}px;width:100px;border-color:${dp.color};color:${dp.color}`;
+      collector.textContent = '💰 COLLECT';
+      area.appendChild(col);
+      area.appendChild(collector);
+    });
+  }
+
+  // Sidebar
+  function renderSidebar() {
+    const list = document.getElementById('upgrade-list');
+    list.innerHTML = '';
+    UPGRADE_DEFS.forEach(def => {
+      const lvl = upgradeState[def.id].level;
+      const maxLvl = def.id === 'limit' ? (def.maxLevel || 99) : MAX_UPGRADES;
+      const cost = getUpgradeCost(def);
+      const canAfford = cost !== null && coins >= cost;
+      const card = document.createElement('div');
+      card.className = 'upgrade-card';
+      const pct = Math.min(100, (lvl / maxLvl) * 100);
+      card.innerHTML = `
+        <div class="upgrade-name">${def.name}</div>
+        <div class="upgrade-info">${def.desc}<br>LVL: ${lvl}/${maxLvl}</div>
+        <div class="upgrade-progress"><div class="upgrade-bar" style="width:${pct}%"></div></div>
+        <button class="upgrade-btn" id="upg-${def.id}" ${cost === null || !canAfford ? 'disabled' : ''}>
+          ${cost === null ? 'MAX!' : `UPGRADE\n🪙${cost}`}
+        </button>
+      `;
+      card.querySelector('.upgrade-btn').addEventListener('click', () => {
+        ensureCtx();
+        doUpgrade(def.id);
+      });
+      list.appendChild(card);
+    });
+
+    const newCost = Math.floor(150 * Math.pow(3, droppers.length - 1));
+    const atMax = droppers.length >= maxDroppers;
+    const newBtn = document.getElementById('new-dropper-btn');
+    const limitInfo = document.getElementById('dropper-limit-info');
+    if (atMax) {
+      newBtn.textContent = '🔒 DROPPER LIMIT';
+      newBtn.disabled = true;
+      limitInfo.textContent = `upgrade LIMIT to add more`;
+    } else {
+      newBtn.textContent = `+ DROPPER (🪙${newCost})`;
+      newBtn.disabled = coins < newCost;
+      limitInfo.textContent = `${droppers.length}/${maxDroppers} droppers`;
+    }
+  }
+
+  function doUpgrade(id) {
+    const def = UPGRADE_DEFS.find(d => d.id === id);
+    const cost = getUpgradeCost(def);
+    if (cost === null || coins < cost) return;
+    coins -= cost;
+    upgradeState[id].level++;
+    if (id === 'limit') {
+      maxDroppers++;
+    }
+    playUpgradeSound();
+    showToast('UPGRADED! ' + def.name);
+    renderSidebar();
+    renderDroppers();
+    updateCps();
+  }
+
+  document.getElementById('new-dropper-btn').addEventListener('click', () => {
+    ensureCtx();
+    const newCost = Math.floor(150 * Math.pow(3, droppers.length - 1));
+    if (droppers.length >= maxDroppers || coins < newCost) return;
+    coins -= newCost;
+    addDropper();
+    playNewDropperSound();
+    showToast('NEW DROPPER ADDED! 📦');
+    renderDroppers();
+    renderSidebar();
+  });
+
+  // Game loop
+  let gameLoopId = null;
+  let lastDrop = [];
+  let totalCps = 0;
+
+  function startGameLoop() {
+    if (gameLoopId) clearInterval(gameLoopId);
+    lastDrop = droppers.map(() => 0);
+    gameLoopId = setInterval(gameTick, 80);
+  }
+
+  function gameTick() {
+    const now = Date.now();
+    const speedLvl = upgradeState.speed.level;
+    const valueLvl = upgradeState.value.level;
+    const multiLvl = upgradeState.multi.level;
+    const interval = Math.max(400, 2500 - speedLvl * 100);
+    const baseIncome = 1 + valueLvl;
+    const multi = multiLvl > 0 ? 2 : 1;
+
+    droppers.forEach((dp, i) => {
+      if (!lastDrop[i]) lastDrop[i] = now;
+      if (now - lastDrop[i] >= interval) {
+        lastDrop[i] = now;
+        coins += dp.baseValue * baseIncome * multi;
+        spawnSquare(dp, multi);
+        playDropSound();
+      }
+    });
+    updateCoinsDisplay();
+    updateCps();
+  }
+
+  function updateCoinsDisplay() {
+    document.getElementById('coins-display').textContent = '🪙 ' + Math.floor(coins).toLocaleString();
+    renderSidebar();
+  }
+
+  function updateCps() {
+    let cps = 0;
+    droppers.forEach(dp => { cps += parseFloat(dropperCoinsPerSec(dp)); });
+    totalCps = cps;
+    document.getElementById('cps-display').textContent = cps.toFixed(1) + '/s';
+    droppers.forEach(dp => {
+      const el = document.getElementById('dp-rate-' + dp.id);
+      if (el) el.textContent = dropperCoinsPerSec(dp) + '/s';
+    });
+  }
+
+  function spawnSquare(dp, count) {
+    const area = document.getElementById('dropper-area');
+    const col = document.getElementById('dropper-col-' + dp.id);
+    if (!col || !area) return;
+    const W = area.offsetWidth || 480;
+    const slotW = Math.floor(W / maxDroppers);
+    const x = dp.id * slotW + (slotW / 2) - 12;
+    for (let k = 0; k < count; k++) {
+      const sq = document.createElement('div');
+      sq.className = 'falling-sq';
+      const size = 22 + Math.floor(Math.random() * 12);
+      const dur = 1.2 + Math.random() * 0.8;
+      sq.style.cssText = `
+        left:${x + k * 6 + (Math.random() - 0.5) * 20}px;
+        width:${size}px;height:${size}px;
+        background:${dp.color}33;
+        border-color:${dp.color};
+        animation:squareFall ${dur}s ease-in forwards;
+      `;
+      sq.textContent = '+' + (1 + upgradeState.value.level);
+      area.appendChild(sq);
+      setTimeout(() => sq.remove(), dur * 1000 + 100);
+    }
+  }
+
+  // Toast
+  function showToast(msg) {
+    const existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    document.getElementById('game-root').appendChild(t);
+    setTimeout(() => t.remove(), 1800);
+  }
+
+  // Button events
+  document.getElementById('play-btn').addEventListener('click', () => {
+    playClick();
+    showGame();
+  });
+  document.getElementById('menu-settings-btn').addEventListener('click', () => {
+    playClick();
+    document.getElementById('settings-overlay').style.display = 'flex';
+  });
+  document.getElementById('settings-btn').addEventListener('click', () => {
+    playClick();
+    document.getElementById('settings-overlay').style.display = 'flex';
+  });
+  document.getElementById('close-settings').addEventListener('click', () => {
+    playClick();
+    document.getElementById('settings-overlay').style.display = 'none';
+  });
+  document.getElementById('menu-btn').addEventListener('click', () => {
+    playClick();
+    document.getElementById('game-screen').classList.add('hidden');
+    document.getElementById('menu-screen').classList.remove('hidden');
+    stopMusic();
+    if (gameLoopId) { clearInterval(gameLoopId); gameLoopId = null; }
+  });
+
+  document.getElementById('music-vol').addEventListener('input', function() {
+    musicVol = this.value / 100;
+    if (musicGain) musicGain.gain.value = musicVol;
+    document.getElementById('music-val').textContent = this.value;
+  });
+  document.getElementById('sfx-vol').addEventListener('input', function() {
+    sfxVol = this.value / 100;
+    if (sfxGain) sfxGain.gain.value = sfxVol;
+    document.getElementById('sfx-val').textContent = this.value;
+  });
+})();
+</script>
